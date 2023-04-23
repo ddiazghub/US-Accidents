@@ -11,7 +11,8 @@ import os
 import sys
 import logging
 
-COPY_QUERY = SQL("COPY \"Accidents\" ({}) FROM STDIN").format(SQL(', ').join(Identifier(column) for column in COLUMNS))
+COLS = [column for column in COLUMNS if column != "ID"]
+COPY_QUERY = SQL("COPY \"Accidents\" ({}) FROM STDIN").format(SQL(', ').join(Identifier(column) for column in COLS))
 log = logging.getLogger(__name__)
 
 def download_dataset(url: str, filename: str):
@@ -67,7 +68,7 @@ def read_csv(filename: str, cursor: Cursor):
     progress = 0
 
     with cursor.copy(COPY_QUERY) as copy:
-        for chunk in pd.read_csv(filename, compression="zip", skiprows=1, usecols=COLUMNS, names=ALL_COLUMNS, sep=",", quotechar="\"", chunksize=CHUNK_SIZE):
+        for chunk in pd.read_csv(filename, compression="zip", skiprows=1, usecols=COLS, names=ALL_COLUMNS, sep=",", quotechar="\"", chunksize=CHUNK_SIZE):
             for record in chunk.replace({np.nan: None}).values:
                 copy.write_row(RecordArray(record))
 
