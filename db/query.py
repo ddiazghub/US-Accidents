@@ -4,7 +4,7 @@ from psycopg.rows import dict_row
 from psycopg.sql import Composed, Identifier, SQL
 from db.connect import connect
 from datetime import datetime
-from config import DATABASE
+from config import DATABASE, DEFAULT_COLUMNS
 
 def build_query(fields: set[str], where_clause: str | None = None) -> Composed:
     """
@@ -20,17 +20,18 @@ def build_query(fields: set[str], where_clause: str | None = None) -> Composed:
         FROM "Accidents"
         {f'WHERE {where_clause}' if where_clause else ""}
     ), "resolution"("value") AS (
-        SELECT GREATEST(1, COUNT(*) / 1000)
+        SELECT GREATEST(1, COUNT(*) / (%s))::INTEGER
         FROM base_query
     )
     SELECT "base_query".*
     FROM "base_query", "resolution"
-    WHERE "base_query"."ID" % "resolution"."value" = 0
+    WHERE "base_query"."ID" %% "resolution"."value" = 0
+    LIMIT (%s)
     """
 
     return SQL(query).format(SQL(',').join(Identifier(column) for column in fields))
 
-def accidents(fields: set[str], where_clause: str | None = None, params: Sequence | None = None) -> list[Accident]:
+def all_accidents(fields: set[str], where_clause: str | None = None, params: Sequence | None = None) -> list[Accident]:
     """
     Queries the accidents table.
     
@@ -44,7 +45,27 @@ def accidents(fields: set[str], where_clause: str | None = None, params: Sequenc
 
         return connection.execute(query, params).fetchall()
 
-def accidents_since(fields: set[str], start: datetime) -> list[Accident]:
+def accidents(fields: set[str], start: datetime | None = None, end: datetime | None = None, limit: int = 100) -> list[Accident]:
+    """
+    Queries the accidents table.
+    
+    :param fields: Database columns to fetch with the query.
+    :param where_clause: Query's where clause to filter rows.
+    :param params: Values used to query.
+    """
+    fields = DEFAULT_COLUMNS.union(fields)
+    
+    match (start, end):
+        case (None, None):
+            return all_accidents(fields, params=(limit, limit))
+        case (_, None):
+            return accidents_since(fields, start, limit)
+        case (None, _):
+            return accidents_until(fields, end, limit)
+        case _:
+            return accidents_between(fields, start, end, limit)
+
+def accidents_since(fields: set[str], start: datetime, limit: int = 100) -> list[Accident]:
     """
     Queries accidents since a given timestamp.
     
@@ -52,9 +73,9 @@ def accidents_since(fields: set[str], start: datetime) -> list[Accident]:
     :param start: Initial timestamp. Accidents happening after this timestamp will be fetched.
     """
 
-    return accidents(fields, where_clause="\"End_Time\" > (%s)", params=(start))
+    return all_accidents(fields, where_clause="\"End_Time\" > (%s)", params=(start, limit, limit))
 
-def accidents_until(fields: set[str], end: datetime) -> list[Accident]:
+def accidents_until(fields: set[str], end: datetime, limit: int = 100) -> list[Accident]:
     """
     Queries accidents until a given timestamp.
     
@@ -62,9 +83,9 @@ def accidents_until(fields: set[str], end: datetime) -> list[Accident]:
     :param end: Ending timestamp. Accidents happening before this timestamp will be fetched.
     """
 
-    return accidents(fields, where_clause="\"Start_Time\" < (%s)", params=(end))
+    return all_accidents(fields, where_clause="\"Start_Time\" < (%s)", params=(end, limit, limit))
 
-def accidents_between(fields: set[str], start: datetime, end: datetime) -> list[Accident]:
+def accidents_between(fields: set[str], start: datetime, end: datetime, limit: int = 100) -> list[Accident]:
     """
     Queries accidents in a timestamp range.
     
@@ -72,4 +93,4 @@ def accidents_between(fields: set[str], start: datetime, end: datetime) -> list[
     :param start: Initial timestamp. Accidents happening after this timestamp will be fetched.
     :param start: Ending timestamp. Accidents happening before this timestamp will be fetched."
     """
-    return accidents(fields, where_clause="\"End_Time\" > (%s) AND \"Start_Time\" < (%s)", params=(start, end))
+    return all_accidents(fields, where_clause="\"End_Time\" > (%s) AND \"Start_Time\" < (%s)", params=(start, end, limit, limit))

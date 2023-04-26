@@ -45,4 +45,7 @@ CREATE TABLE IF NOT EXISTS "Accidents" (
     "Civil_Twilight" VARCHAR(10),
     "Nautical_Twilight" VARCHAR(10),
     "Astronomical_Twilight" VARCHAR(10)
-)
+);
+
+CREATE INDEX IF NOT EXISTS stime_index ON "Accidents" USING BTREE ("Start_Time");
+CREATE INDEX IF NOT EXISTS etime_index ON "Accidents" USING BTREE ("End_Time");
