@@ -6,7 +6,7 @@ from fastapi.params import Query
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from db.load_db import create_database
-from db.query import accident_count, accidents
+from db.query import accident_count, accident_severities, accidents
 from docs import API_DESCRIPTION, END_DESCRIPTION, FIELDS_DESCRIPTION, LIMIT_DESCRIPTION, START_DESCRIPTION, YEAR_DESCRIPTION
 
 """Checks if database exists on startup and creates it if doesn't"""
@@ -33,5 +33,10 @@ async def get_accidents(fields: Annotated[list[str], Query(description=FIELDS_DE
 @app.get("/accidents/count", tags=["accidents"])
 async def get_accident_count(year: Annotated[int | None, Query(description=YEAR_DESCRIPTION)] = None) -> list[Accident]:
     return accident_count(year)
+
+"""Query accident severities"""
+@app.get("/accidents/severities", tags=["accidents"])
+async def get_severities(year: Annotated[int | None, Query(description=YEAR_DESCRIPTION)] = None, limit: Annotated[int, Query(description=LIMIT_DESCRIPTION)] = 1000) -> list[Accident]:
+    return accident_severities(year, limit)
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

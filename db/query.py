@@ -91,7 +91,7 @@ def accidents_between(fields: set[str], start: datetime, end: datetime, limit: i
     
     :param fields: Database columns to fetch with the query.
     :param start: Initial timestamp. Accidents happening after this timestamp will be fetched.
-    :param start: Ending timestamp. Accidents happening before this timestamp will be fetched."
+    :param start: Ending timestamp. Accidents happening before this timestamp will be fetched.
     """
     return all_accidents(fields, where_clause="\"End_Time\" > (%s) AND \"Start_Time\" < (%s)", params=(start, end, limit, limit))
 
@@ -99,9 +99,7 @@ def accident_count(year: int | None) -> list[Accident]:
     """
     Queries the number of accidents in each state.
     
-    :param fields: Database columns to fetch with the query.
-    :param start: Initial timestamp. Accidents happening after this timestamp will be fetched.
-    :param start: Ending timestamp. Accidents happening before this timestamp will be fetched."
+    :param year: Accidents happening in the specified year will be counted.
     """
     query = f"""
     SELECT "State", COUNT(*) AS "AccidentCount"
@@ -112,3 +110,27 @@ def accident_count(year: int | None) -> list[Accident]:
 
     with connect(DATABASE, row_factory=dict_row) as connection:
         return connection.execute(*((query, (year,)) if year else (query,))).fetchall()
+    
+def accident_severities(year: int | None, limit: int) -> list[Accident]:
+    """
+    Queries accidents severity and location.
+    
+    :param year: Accidents happening in the specified year will be queried.
+    """
+    query = f"""
+    WITH "base_query" AS (
+        SELECT "ID", "Severity", "Start_Lat", "Start_Lng"
+        FROM "Accidents"
+        {'WHERE EXTRACT(YEAR FROM "Start_Time") = (%s)' if year else ""}
+    ), "resolution"("value") AS (
+        SELECT GREATEST(1, COUNT(*) / (%s))::INTEGER
+        FROM base_query
+    )
+    SELECT "base_query"."Severity", "base_query"."Start_Lat", "base_query"."Start_Lng"
+    FROM "base_query", "resolution"
+    WHERE "base_query"."ID" %% "resolution"."value" = 0
+    LIMIT (%s)
+    """
+
+    with connect(DATABASE, row_factory=dict_row) as connection:
+        return connection.execute(*(query, (year, limit, limit) if year else (limit, limit))).fetchall()
