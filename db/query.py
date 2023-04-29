@@ -51,7 +51,7 @@ def accidents(fields: set[str], start: datetime | None = None, end: datetime | N
     
     :param fields: Database columns to fetch with the query.
     :param where_clause: Query's where clause to filter rows.
-    :param params: Values used to query.
+    :param limit: Max number of records to fetch.
     """
     fields = DEFAULT_COLUMNS.union(fields)
     
@@ -71,6 +71,7 @@ def accidents_since(fields: set[str], start: datetime, limit: int = 100) -> list
     
     :param fields: Database columns to fetch with the query.
     :param start: Initial timestamp. Accidents happening after this timestamp will be fetched.
+    :param limit: Max number of records to fetch.
     """
 
     return all_accidents(fields, where_clause="\"End_Time\" > (%s)", params=(start, limit, limit))
@@ -81,6 +82,7 @@ def accidents_until(fields: set[str], end: datetime, limit: int = 100) -> list[A
     
     :param fields: Database columns to fetch with the query.
     :param end: Ending timestamp. Accidents happening before this timestamp will be fetched.
+    :param limit: Max number of records to fetch.
     """
 
     return all_accidents(fields, where_clause="\"Start_Time\" < (%s)", params=(end, limit, limit))
@@ -92,6 +94,7 @@ def accidents_between(fields: set[str], start: datetime, end: datetime, limit: i
     :param fields: Database columns to fetch with the query.
     :param start: Initial timestamp. Accidents happening after this timestamp will be fetched.
     :param start: Ending timestamp. Accidents happening before this timestamp will be fetched.
+    :param limit: Max number of records to fetch.
     """
     return all_accidents(fields, where_clause="\"End_Time\" > (%s) AND \"Start_Time\" < (%s)", params=(start, end, limit, limit))
 
@@ -116,6 +119,7 @@ def accident_severities(year: int | None, limit: int) -> list[Accident]:
     Queries accidents severity and location.
     
     :param year: Accidents happening in the specified year will be queried.
+    :param limit: Max number of records to fetch.
     """
     query = f"""
     WITH "base_query" AS (
@@ -134,3 +138,19 @@ def accident_severities(year: int | None, limit: int) -> list[Accident]:
 
     with connect(DATABASE, row_factory=dict_row) as connection:
         return connection.execute(*(query, (year, limit, limit) if year else (limit, limit))).fetchall()
+    
+def count_by_weather(year: int | None) -> list[Accident]:
+    """
+    Counts accidents by weather condition.
+    
+    :param year: Accidents happening in the specified year will be queried.
+    """
+    query = f"""
+    SELECT "Weather_Condition", COUNT(*) AS "AccidentCount"
+    FROM "Accidents"
+    {'WHERE EXTRACT(YEAR FROM "Start_Time") = (%s)' if year else ""}
+    GROUP BY "Weather_Condition"
+    """
+
+    with connect(DATABASE, row_factory=dict_row) as connection:
+        return connection.execute(*((query, (year,)) if year else (query,))).fetchall()

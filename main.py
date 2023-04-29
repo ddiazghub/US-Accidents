@@ -1,4 +1,5 @@
 import logging
+from config import STATES
 from model import Accident
 from typing import Annotated
 from fastapi import FastAPI
@@ -6,7 +7,7 @@ from fastapi.params import Query
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from db.load_db import create_database
-from db.query import accident_count, accident_severities, accidents
+from db.query import accident_count, accident_severities, accidents, count_by_weather
 from docs import API_DESCRIPTION, END_DESCRIPTION, FIELDS_DESCRIPTION, LIMIT_DESCRIPTION, START_DESCRIPTION, YEAR_DESCRIPTION
 
 """Checks if database exists on startup and creates it if doesn't"""
@@ -32,11 +33,26 @@ async def get_accidents(fields: Annotated[list[str], Query(description=FIELDS_DE
 """Query accident count per states"""
 @app.get("/accidents/count", tags=["accidents"])
 async def get_accident_count(year: Annotated[int | None, Query(description=YEAR_DESCRIPTION)] = None) -> list[Accident]:
-    return accident_count(year)
+    counts = accident_count(year)
+    states_with_accidents = {count["State"] for count in counts}
+
+    for state in STATES:
+        if state not in states_with_accidents:
+            counts.append({
+                "State": state,
+                "AccidentCount": 0
+            })
+    
+    return counts
 
 """Query accident severities"""
 @app.get("/accidents/severities", tags=["accidents"])
 async def get_severities(year: Annotated[int | None, Query(description=YEAR_DESCRIPTION)] = None, limit: Annotated[int, Query(description=LIMIT_DESCRIPTION)] = 1000) -> list[Accident]:
     return accident_severities(year, limit)
+
+"""Count accidents by weather condition"""
+@app.get("/accidents/count/by/weather", tags=["accidents"])
+async def get_count_by_weather(year: Annotated[int | None, Query(description=YEAR_DESCRIPTION)] = None) -> list[Accident]:
+    return count_by_weather(year)
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
