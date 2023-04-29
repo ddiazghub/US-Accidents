@@ -27,27 +27,31 @@ def create_database():
                 log.info("Creating database.")
                 cursor.execute(f"CREATE DATABASE \"{DATABASE}\"")
 
+    old_version = False
+
     # Creates schema and loads data
-    with connect(DATABASE) as connection:
-        with connection.cursor() as cursor:
-            if not cursor.execute("SELECT * FROM pg_tables WHERE schemaname = 'public' AND tablename = 'Accidents'").fetchone():
-                if not os.path.exists(DATASET_FILENAME):
-                    log.critical("Dataset not found. Please download the dataset to the projects directory and name it \"archive.zip\".")
-                    sys.exit(1)
-                
-                log.info("Creating table schema.")
+    with connect(DATABASE) as connection, connection.cursor() as cursor:
+        if not cursor.execute("SELECT * FROM pg_tables WHERE schemaname = 'public' AND tablename = 'Accidents'").fetchone():
+            if not os.path.exists(DATASET_FILENAME):
+                log.critical("Dataset not found. Please download the dataset to the projects directory and name it \"archive.zip\".")
+                sys.exit(1)
+            
+            log.info("Creating table schema.")
 
-                with open("schema.sql") as schema:
-                    cursor.execute(schema.read())
+            with open("schema.sql") as schema:
+                cursor.execute(schema.read())
 
-                read_csv(DATASET_FILENAME, cursor)
-                connection.commit()
+            read_csv(DATASET_FILENAME, cursor)
+            connection.commit()
 
-            if cursor.execute("SELECT COUNT(*) FROM \"Accidents\"").fetchone()[0] > TARGET_SIZE + CHUNK_SIZE:
-                cursor.execute(f"DROP DATABASE \"{DATABASE}\"")
-                connection.commit()
-                log.info("Unfiltered data found. Creating database with filtered data.")
-                create_database()
+        old_version = cursor.execute("SELECT COUNT(*) FROM \"Accidents\"").fetchone()[0] > TARGET_SIZE + CHUNK_SIZE
+
+    if old_version:
+        with connect("postgres", autocommit=True) as connection:
+            connection.execute(f"DROP DATABASE \"{DATABASE}\"")
+
+        log.info("Unfiltered data found. Creating database with filtered data.")
+        create_database()
 
 def read_csv(filename: str, cursor: Cursor):
     """

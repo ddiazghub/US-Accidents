@@ -18,7 +18,7 @@ def build_query(fields: set[str], where_clause: str | None = None) -> Composed:
     WITH "base_query" AS (
         SELECT {{}}
         FROM "Accidents"
-        {f'WHERE {where_clause}' if where_clause else ""}
+        {f"WHERE {where_clause}" if where_clause else ""}
     ), "resolution"("value") AS (
         SELECT GREATEST(1, COUNT(*) / (%s))::INTEGER
         FROM base_query
@@ -94,3 +94,21 @@ def accidents_between(fields: set[str], start: datetime, end: datetime, limit: i
     :param start: Ending timestamp. Accidents happening before this timestamp will be fetched."
     """
     return all_accidents(fields, where_clause="\"End_Time\" > (%s) AND \"Start_Time\" < (%s)", params=(start, end, limit, limit))
+
+def accident_count(year: int | None) -> list[Accident]:
+    """
+    Queries the number of accidents in each state.
+    
+    :param fields: Database columns to fetch with the query.
+    :param start: Initial timestamp. Accidents happening after this timestamp will be fetched.
+    :param start: Ending timestamp. Accidents happening before this timestamp will be fetched."
+    """
+    query = f"""
+    SELECT "State", COUNT(*) AS "AccidentCount"
+    FROM "Accidents"
+    {'WHERE EXTRACT(YEAR FROM "Start_Time") = (%s)' if year else ""}
+    GROUP BY "State"
+    """
+
+    with connect(DATABASE, row_factory=dict_row) as connection:
+        return connection.execute(*((query, (year,)) if year else (query,))).fetchall()
