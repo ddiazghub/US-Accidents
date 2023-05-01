@@ -7,7 +7,7 @@ from fastapi.params import Query
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from db.load_db import create_database
-from db.query import accident_count, accident_severities, accidents, count_by_weather
+from db.query import count_by_month, count_by_state, accident_severities, accidents, count_by_weather
 from docs import API_DESCRIPTION, END_DESCRIPTION, FIELDS_DESCRIPTION, LIMIT_DESCRIPTION, START_DESCRIPTION, YEAR_DESCRIPTION
 
 """Checks if database exists on startup and creates it if doesn't"""
@@ -33,7 +33,7 @@ async def get_accidents(fields: Annotated[list[str], Query(description=FIELDS_DE
 """Query accident count per states"""
 @app.get("/accidents/count", tags=["accidents"])
 async def get_accident_count(year: Annotated[int | None, Query(description=YEAR_DESCRIPTION)] = None) -> list[Accident]:
-    counts = accident_count(year)
+    counts = count_by_state(year)
     states_with_accidents = {count["State"] for count in counts}
 
     for state in STATES:
@@ -54,5 +54,10 @@ async def get_severities(year: Annotated[int | None, Query(description=YEAR_DESC
 @app.get("/accidents/count/by/weather", tags=["accidents"])
 async def get_count_by_weather(year: Annotated[int | None, Query(description=YEAR_DESCRIPTION)] = None) -> list[Accident]:
     return count_by_weather(year)
+
+"""Count accidents by Month"""
+@app.get("/accidents/count/by/month", tags=["accidents"])
+async def get_count_by_month(start: Annotated[str | None, Query(description=START_DESCRIPTION)] = None, end: Annotated[str | None, Query(description=END_DESCRIPTION)] = None) -> list[Accident]:
+    return count_by_month(start, end)
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

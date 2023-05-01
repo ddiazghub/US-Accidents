@@ -98,9 +98,9 @@ def accidents_between(fields: set[str], start: datetime, end: datetime, limit: i
     """
     return all_accidents(fields, where_clause="\"End_Time\" > (%s) AND \"Start_Time\" < (%s)", params=(start, end, limit, limit))
 
-def accident_count(year: int | None) -> list[Accident]:
+def count_by_state(year: int | None) -> list[Accident]:
     """
-    Queries the number of accidents in each state.
+    Counts the number of accidents in each state.
     
     :param year: Accidents happening in the specified year will be counted.
     """
@@ -154,3 +154,37 @@ def count_by_weather(year: int | None) -> list[Accident]:
 
     with connect(DATABASE, row_factory=dict_row) as connection:
         return connection.execute(*((query, (year,)) if year else (query,))).fetchall()
+    
+def count_by_month(start: datetime | None, end: datetime | None) -> list[Accident]:
+    """
+    Counts the number of accidents happening each month.
+    
+    :param start: Initial timestamp. Accidents happening after this timestamp will be counted.
+    :param start: Ending timestamp. Accidents happening before this timestamp will be counted.
+    """
+    where_clause = ""
+    params: list[str] = []
+
+    match (start, end):
+        case (None, None):
+            pass
+        case (_, None):
+            where_clause = "WHERE \"Start_Time\" > (%s)"
+            params.append(start)
+        case (None, _):
+            where_clause = "WHERE \"End_Time\" < (%s)"
+            params.append(end)
+        case _:
+            where_clause = "WHERE \"Start_Time\" > (%s) AND \"End_Time\" < (%s)"
+            params.append(start)
+            params.append(end)
+
+    query = f"""
+    SELECT EXTRACT(MONTH FROM "Start_Time") AS "Month", COUNT(*) AS "AccidentCount"
+    FROM "Accidents"
+    {where_clause}
+    GROUP BY "Month"
+    """
+
+    with connect(DATABASE, row_factory=dict_row) as connection:
+        return connection.execute(query, params).fetchall()
