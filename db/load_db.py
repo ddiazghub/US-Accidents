@@ -44,7 +44,8 @@ def create_database():
             read_csv(DATASET_FILENAME, cursor)
             connection.commit()
 
-        old_version = cursor.execute("SELECT COUNT(*) FROM \"Accidents\"").fetchone()[0] > TARGET_SIZE + CHUNK_SIZE
+        db_size = cursor.execute("SELECT COUNT(*) FROM \"Accidents\"").fetchone()[0]
+        old_version = db_size > TARGET_SIZE + CHUNK_SIZE or db_size < TARGET_SIZE - CHUNK_SIZE
 
     if old_version:
         with connect("postgres", autocommit=True) as connection:
