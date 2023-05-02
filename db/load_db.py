@@ -45,13 +45,13 @@ def create_database():
             connection.commit()
 
         db_size = cursor.execute("SELECT COUNT(*) FROM \"Accidents\"").fetchone()[0]
-        old_version = db_size > TARGET_SIZE + CHUNK_SIZE or db_size < TARGET_SIZE - CHUNK_SIZE
+        old_version = db_size > DATASET_SIZE + CHUNK_SIZE or db_size < DATASET_SIZE - CHUNK_SIZE
 
     if old_version:
         with connect("postgres", autocommit=True) as connection:
             connection.execute(f"DROP DATABASE \"{DATABASE}\"")
 
-        log.info("Unfiltered data found. Creating database with filtered data.")
+        log.info("Outdated database found. Creating database with updated data.")
         create_database()
 
 def read_csv(filename: str, cursor: Cursor):
@@ -63,20 +63,15 @@ def read_csv(filename: str, cursor: Cursor):
     """
     log.info("Loading CSV into database.")
     progress = 0
-    resolution = int(DATASET_SIZE / TARGET_SIZE)
 
     with cursor.copy(COPY_QUERY) as copy:
-        for chunk_index, chunk in enumerate(pd.read_csv(filename, compression="zip", skiprows=1, usecols=COLS, names=ALL_COLUMNS, sep=",", quotechar="\"", chunksize=CHUNK_SIZE)):
-            for index, record in enumerate(chunk.replace({np.nan: None}).values):
-                if (chunk_index * CHUNK_SIZE + index) % resolution == 0:
-                    copy.write_row(RecordArray(record))
+        for chunk in pd.read_csv(filename, compression="zip", skiprows=1, usecols=COLS, names=ALL_COLUMNS, sep=",", quotechar="\"", chunksize=CHUNK_SIZE):
+            for record in chunk.replace({np.nan: None}).values:
+                copy.write_row(RecordArray(record))
 
-            progress += CHUNK_SIZE / resolution
-            percent = progress * 100 / TARGET_SIZE
+            progress += CHUNK_SIZE
+            percent = progress * 100 / DATASET_SIZE
             print(f"[{'#' * int(percent)}{' ' * int(100 - percent)}] {round(percent, 1)}%", end='\r')
-
-            if progress >= TARGET_SIZE:
-                break
 
         print()
         log.info("Finished populating database")
